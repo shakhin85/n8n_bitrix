@@ -1,0 +1,1849 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bitrix24 × Telegram — Автоматизация задач на n8n</title>
+  <meta name="description" content="Бот для создания задач, эпиков и спринтов в Bitrix24 прямо из Telegram. Low-code автоматизация на n8n." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,300;1,9..144,400&family=Archivo:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --paper:     #F6F2E8;
+      --paper-2:   #EFEADB;
+      --paper-3:   #E6E0CC;
+      --ink:       #12110F;
+      --ink-2:     #1E1C18;
+      --muted:     #706B5F;
+      --muted-2:   #9A9486;
+      --accent:    #B53126;
+      --accent-2:  #8E1E14;
+      --accent-soft:#E9D6D0;
+      --gold:      #B58839;
+
+      --ff-display: 'Fraunces', serif;
+      --ff-body:    'Archivo', sans-serif;
+      --ff-mono:    'JetBrains Mono', monospace;
+
+      --edge: 72px;
+      --radius: 4px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    ::selection { background: var(--accent); color: var(--paper); }
+
+    body {
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--ff-body);
+      font-size: 16px;
+      line-height: 1.65;
+      overflow-x: hidden;
+      font-feature-settings: 'ss01', 'kern';
+      -webkit-font-smoothing: antialiased;
+      cursor: none;
+    }
+
+    /* ══════ PAPER GRAIN ══════ */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 1;
+      opacity: 0.45;
+      mix-blend-mode: multiply;
+    }
+
+    /* ══════ CURSOR ══════ */
+    .cursor-dot {
+      width: 6px; height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      position: fixed;
+      top: 0; left: 0;
+      pointer-events: none;
+      z-index: 9999;
+      transform: translate(-50%, -50%);
+      transition: transform 0.18s, width 0.3s, height 0.3s, background 0.3s;
+    }
+    .cursor-ring {
+      width: 42px; height: 42px;
+      border: 1px solid rgba(181, 49, 38, 0.45);
+      border-radius: 50%;
+      position: fixed;
+      top: 0; left: 0;
+      pointer-events: none;
+      z-index: 9998;
+      transform: translate(-50%, -50%);
+      transition: width 0.35s, height 0.35s, border-color 0.3s;
+    }
+    a, button, .faq-q, .cmd-card, .step-row, .prereq { cursor: none; }
+
+    /* ══════ NAV ══════ */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 28px var(--edge);
+      background: linear-gradient(to bottom, var(--paper) 30%, rgba(246, 242, 232, 0));
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+    }
+
+    .brand-mark {
+      font-family: var(--ff-display);
+      font-size: 20px;
+      font-weight: 600;
+      font-style: italic;
+      color: var(--ink);
+      letter-spacing: -0.02em;
+    }
+
+    .brand-sub {
+      font-family: var(--ff-mono);
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 44px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-family: var(--ff-body);
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--ink);
+      text-decoration: none;
+      letter-spacing: 0.01em;
+      position: relative;
+      transition: color 0.2s;
+    }
+
+    .nav-links a::after {
+      content: '';
+      position: absolute;
+      left: 0; right: 0;
+      bottom: -6px;
+      height: 1px;
+      background: var(--accent);
+      transform: scaleX(0);
+      transform-origin: right;
+      transition: transform 0.3s ease;
+    }
+
+    .nav-links a:hover { color: var(--accent); }
+    .nav-links a:hover::after { transform: scaleX(1); transform-origin: left; }
+
+    /* ══════ HERO ══════ */
+    .hero {
+      padding: 200px var(--edge) 120px;
+      position: relative;
+      max-width: 1440px;
+      margin: 0 auto;
+      z-index: 2;
+    }
+
+    .hero-chapter {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-bottom: 48px;
+    }
+
+    .hero-chapter-num {
+      font-family: var(--ff-display);
+      font-size: 13px;
+      font-style: italic;
+      color: var(--accent);
+      font-weight: 400;
+    }
+
+    .hero-chapter-line {
+      width: 80px;
+      height: 1px;
+      background: var(--ink);
+      opacity: 0.3;
+    }
+
+    .hero-chapter-label {
+      font-family: var(--ff-mono);
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+    }
+
+    .hero-title {
+      font-family: var(--ff-display);
+      font-size: clamp(56px, 9vw, 148px);
+      font-weight: 300;
+      line-height: 0.92;
+      letter-spacing: -0.045em;
+      color: var(--ink);
+      margin-bottom: 40px;
+      max-width: 1150px;
+      font-variation-settings: 'opsz' 144, 'SOFT' 0;
+    }
+
+    .hero-title .italic {
+      font-style: italic;
+      font-weight: 300;
+      color: var(--accent);
+    }
+
+    .hero-title .amp {
+      font-family: var(--ff-display);
+      font-weight: 300;
+      font-style: italic;
+      color: var(--muted);
+      padding: 0 0.05em;
+    }
+
+    .hero-meta {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 80px;
+      margin-top: 80px;
+      align-items: end;
+    }
+
+    .hero-lede {
+      font-family: var(--ff-display);
+      font-size: clamp(18px, 1.6vw, 22px);
+      font-weight: 300;
+      line-height: 1.55;
+      color: var(--ink);
+      max-width: 560px;
+    }
+
+    .hero-lede strong {
+      font-style: italic;
+      font-weight: 400;
+      color: var(--accent);
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      align-items: flex-start;
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+      padding: 18px 36px 18px 40px;
+      background: var(--ink);
+      color: var(--paper);
+      font-family: var(--ff-body);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-decoration: none;
+      text-transform: uppercase;
+      border: none;
+      border-radius: 999px;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-primary::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--accent);
+      border-radius: inherit;
+      transform: translateY(100%);
+      transition: transform 0.35s ease;
+    }
+
+    .btn-primary:hover::before { transform: translateY(0); }
+    .btn-primary > * { position: relative; z-index: 1; }
+    .btn-primary:hover { transform: translateY(-2px); }
+
+    .btn-primary .arrow {
+      display: inline-block;
+      transition: transform 0.35s ease;
+    }
+
+    .btn-primary:hover .arrow { transform: translateX(4px); }
+
+    .btn-text {
+      font-family: var(--ff-display);
+      font-size: 15px;
+      font-style: italic;
+      color: var(--ink);
+      text-decoration: none;
+      border-bottom: 1px solid currentColor;
+      padding-bottom: 2px;
+      transition: color 0.2s;
+    }
+
+    .btn-text:hover { color: var(--accent); }
+
+    /* Floating meta card */
+    .hero-badge {
+      position: absolute;
+      top: 220px;
+      right: var(--edge);
+      border: 1px solid rgba(18, 17, 15, 0.2);
+      padding: 28px 32px;
+      background: var(--paper-2);
+      max-width: 280px;
+      transform: rotate(1.2deg);
+      box-shadow: -8px 14px 0 var(--paper-3);
+    }
+
+    .hero-badge-num {
+      font-family: var(--ff-display);
+      font-size: 62px;
+      font-weight: 300;
+      line-height: 0.9;
+      color: var(--accent);
+      margin-bottom: 8px;
+      font-style: italic;
+    }
+
+    .hero-badge-label {
+      font-family: var(--ff-mono);
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      line-height: 1.5;
+    }
+
+    .hero-badge-label strong {
+      color: var(--ink);
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    /* ══════ RULE ══════ */
+    .rule {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 0 var(--edge);
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .rule-line {
+      flex: 1;
+      height: 1px;
+      background: var(--ink);
+      opacity: 0.18;
+    }
+
+    .rule-label {
+      font-family: var(--ff-mono);
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+    }
+
+    /* ══════ SECTION BASE ══════ */
+    section {
+      padding: 140px var(--edge);
+      max-width: 1440px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 2;
+    }
+
+    .section-head {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 80px;
+      align-items: start;
+      margin-bottom: 96px;
+    }
+
+    .section-chapter {
+      font-family: var(--ff-mono);
+      font-size: 11px;
+      color: var(--accent);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      padding-top: 20px;
+      position: relative;
+    }
+
+    .section-chapter::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 40px;
+      height: 1px;
+      background: var(--accent);
+    }
+
+    .section-title {
+      font-family: var(--ff-display);
+      font-size: clamp(40px, 5.5vw, 84px);
+      font-weight: 300;
+      line-height: 0.95;
+      letter-spacing: -0.035em;
+      color: var(--ink);
+      max-width: 900px;
+      font-variation-settings: 'opsz' 144;
+    }
+
+    .section-title .italic {
+      font-style: italic;
+      color: var(--accent);
+    }
+
+    .section-kicker {
+      font-family: var(--ff-display);
+      font-size: 17px;
+      font-style: italic;
+      font-weight: 300;
+      color: var(--muted);
+      margin-top: 20px;
+      max-width: 620px;
+      line-height: 1.6;
+    }
+
+    /* ══════ PREREQS ══════ */
+    .prereqs-intro {
+      font-family: var(--ff-display);
+      font-size: 21px;
+      font-style: italic;
+      font-weight: 300;
+      color: var(--ink);
+      max-width: 780px;
+      line-height: 1.55;
+      margin-bottom: 64px;
+      padding-left: 240px;
+    }
+
+    .prereqs-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0;
+      border-top: 1px solid var(--ink);
+      border-bottom: 1px solid var(--ink);
+    }
+
+    .prereq {
+      padding: 48px 40px;
+      border-right: 1px solid rgba(18, 17, 15, 0.18);
+      position: relative;
+      transition: background 0.4s;
+    }
+
+    .prereq:last-child { border-right: none; }
+    .prereq:hover { background: var(--paper-2); }
+
+    .prereq-marker {
+      font-family: var(--ff-mono);
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.15em;
+      margin-bottom: 40px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .prereq-marker .num {
+      font-family: var(--ff-display);
+      font-size: 24px;
+      font-style: italic;
+      color: var(--accent);
+      letter-spacing: normal;
+    }
+
+    .prereq-title {
+      font-family: var(--ff-display);
+      font-size: 32px;
+      font-weight: 400;
+      line-height: 1.1;
+      color: var(--ink);
+      margin-bottom: 20px;
+      letter-spacing: -0.02em;
+    }
+
+    .prereq-title .italic {
+      font-style: italic;
+      color: var(--accent);
+    }
+
+    .prereq-desc {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.7;
+      margin-bottom: 32px;
+    }
+
+    .prereq-link {
+      font-family: var(--ff-display);
+      font-size: 15px;
+      font-style: italic;
+      color: var(--ink);
+      text-decoration: none;
+      border-bottom: 1px solid var(--ink);
+      padding-bottom: 2px;
+      transition: color 0.2s, border-color 0.2s;
+    }
+
+    .prereq-link:hover { color: var(--accent); border-color: var(--accent); }
+
+    /* ══════ ARCH ══════ */
+    .arch-section { background: var(--ink); margin: 0; padding: 0; max-width: none; }
+    .arch-inner {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 140px var(--edge);
+    }
+
+    .arch-inner .section-title { color: var(--paper); }
+    .arch-inner .section-title .italic { color: var(--accent-soft); }
+    .arch-inner .section-kicker { color: rgba(246, 242, 232, 0.55); }
+    .arch-inner .section-chapter { color: var(--accent-soft); }
+    .arch-inner .section-chapter::before { background: var(--accent-soft); }
+
+    .arch-flow {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0;
+      border-top: 1px solid rgba(246, 242, 232, 0.15);
+      border-bottom: 1px solid rgba(246, 242, 232, 0.15);
+      margin-top: 60px;
+    }
+
+    .arch-node {
+      padding: 56px 32px;
+      border-right: 1px solid rgba(246, 242, 232, 0.15);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      position: relative;
+      transition: background 0.3s;
+    }
+
+    .arch-node:last-child { border-right: none; }
+    .arch-node:hover { background: rgba(181, 49, 38, 0.08); }
+
+    .arch-step {
+      font-family: var(--ff-mono);
+      font-size: 10px;
+      color: rgba(246, 242, 232, 0.4);
+      letter-spacing: 0.15em;
+    }
+
+    .arch-label {
+      font-family: var(--ff-display);
+      font-size: 24px;
+      font-weight: 300;
+      color: var(--paper);
+      line-height: 1.15;
+    }
+
+    .arch-label .italic {
+      font-style: italic;
+      color: var(--accent-soft);
+    }
+
+    .arch-desc {
+      font-family: var(--ff-body);
+      font-size: 12px;
+      color: rgba(246, 242, 232, 0.5);
+      line-height: 1.6;
+      margin-top: auto;
+    }
+
+    .arch-node.highlight { background: rgba(181, 49, 38, 0.14); }
+    .arch-node.highlight::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 2px;
+      background: var(--accent);
+    }
+
+    /* ══════ STEPS ══════ */
+    .steps-wrap {
+      display: grid;
+      gap: 1px;
+      background: rgba(18, 17, 15, 0.2);
+      border-top: 1px solid var(--ink);
+      border-bottom: 1px solid var(--ink);
+    }
+
+    .step-row {
+      background: var(--paper);
+      display: grid;
+      grid-template-columns: 160px 1fr 1fr;
+      gap: 60px;
+      padding: 64px 48px;
+      transition: background 0.3s;
+      position: relative;
+    }
+
+    .step-row:hover { background: var(--paper-2); }
+
+    .step-row::before {
+      content: '';
+      position: absolute;
+      top: 0; bottom: 0; left: 0;
+      width: 0;
+      background: var(--accent);
+      transition: width 0.3s ease;
+    }
+
+    .step-row:hover::before { width: 4px; }
+
+    .step-label {
+      font-family: var(--ff-display);
+      font-size: 12px;
+      font-style: italic;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .step-label .num {
+      font-family: var(--ff-display);
+      font-size: 92px;
+      font-weight: 300;
+      font-style: italic;
+      color: var(--accent);
+      display: block;
+      line-height: 0.85;
+      letter-spacing: -0.04em;
+      margin-bottom: 12px;
+    }
+
+    .step-body-main {}
+
+    .step-title {
+      font-family: var(--ff-display);
+      font-size: 32px;
+      font-weight: 400;
+      line-height: 1.1;
+      color: var(--ink);
+      margin-bottom: 20px;
+      letter-spacing: -0.02em;
+    }
+
+    .step-title .italic {
+      font-style: italic;
+      color: var(--accent);
+    }
+
+    .step-desc {
+      font-family: var(--ff-body);
+      font-size: 15px;
+      color: var(--muted);
+      line-height: 1.75;
+      margin-bottom: 24px;
+    }
+
+    .step-desc strong {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .step-desc code {
+      font-family: var(--ff-mono);
+      font-size: 13px;
+      color: var(--accent);
+      background: var(--accent-soft);
+      padding: 2px 7px;
+      border-radius: 3px;
+    }
+
+    .step-body-aside {}
+
+    .code-block {
+      background: var(--ink);
+      color: var(--paper);
+      font-family: var(--ff-mono);
+      font-size: 12px;
+      line-height: 1.9;
+      padding: 22px 26px;
+      border-radius: 4px;
+      overflow-x: auto;
+      position: relative;
+      margin-bottom: 18px;
+    }
+
+    .code-block .c  { color: #8B8375; }
+    .code-block .k  { color: #E8A572; }
+    .code-block .s  { color: #A7B99B; }
+    .code-block .v  { color: #E9D6D0; }
+    .code-block .r  { color: #D67369; }
+
+    .copy-btn {
+      position: absolute;
+      top: 12px; right: 12px;
+      background: rgba(246, 242, 232, 0.08);
+      border: 1px solid rgba(246, 242, 232, 0.2);
+      color: rgba(246, 242, 232, 0.6);
+      font-family: var(--ff-mono);
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      padding: 4px 10px;
+      border-radius: 3px;
+      text-transform: uppercase;
+      transition: all 0.2s;
+    }
+
+    .copy-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent-soft);
+      background: rgba(181, 49, 38, 0.2);
+    }
+
+    .step-note {
+      display: flex;
+      gap: 14px;
+      padding: 18px 22px;
+      border-left: 2px solid var(--accent);
+      background: var(--accent-soft);
+      font-family: var(--ff-display);
+      font-size: 14px;
+      font-style: italic;
+      color: var(--ink);
+      line-height: 1.6;
+    }
+
+    .step-note strong {
+      font-style: normal;
+      font-weight: 600;
+      color: var(--accent-2);
+    }
+
+    /* ══════ COMMANDS ══════ */
+    .commands-section { background: var(--paper-2); margin: 0; padding: 0; max-width: none; }
+    .commands-inner {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 140px var(--edge);
+    }
+
+    .commands-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: rgba(18, 17, 15, 0.15);
+      border: 1px solid var(--ink);
+    }
+
+    .cmd-card {
+      background: var(--paper);
+      padding: 40px 32px;
+      transition: background 0.25s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cmd-card:hover { background: var(--paper-2); }
+
+    .cmd-card::after {
+      content: '';
+      position: absolute;
+      right: 32px;
+      top: 40px;
+      width: 26px;
+      height: 26px;
+      border: 1px solid var(--ink);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--paper);
+      transition: all 0.3s;
+    }
+
+    .cmd-card::before {
+      content: '→';
+      position: absolute;
+      right: 36px;
+      top: 41px;
+      font-family: var(--ff-body);
+      font-size: 14px;
+      color: var(--ink);
+      z-index: 2;
+      transition: transform 0.3s;
+    }
+
+    .cmd-card:hover::after { background: var(--accent); border-color: var(--accent); }
+    .cmd-card:hover::before { color: var(--paper); transform: translateX(2px); }
+
+    .cmd-slash {
+      font-family: var(--ff-mono);
+      font-size: 14px;
+      color: var(--accent);
+      margin-bottom: 32px;
+      display: inline-block;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--accent);
+    }
+
+    .cmd-name {
+      font-family: var(--ff-display);
+      font-size: 26px;
+      font-weight: 400;
+      color: var(--ink);
+      margin-bottom: 14px;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+    }
+
+    .cmd-name .italic {
+      font-style: italic;
+    }
+
+    .cmd-desc {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.7;
+      margin-bottom: 20px;
+    }
+
+    .cmd-desc code {
+      font-family: var(--ff-mono);
+      font-size: 11px;
+      color: var(--ink);
+      background: var(--paper-3);
+      padding: 1px 5px;
+      border-radius: 2px;
+    }
+
+    .cmd-example {
+      font-family: var(--ff-mono);
+      font-size: 11px;
+      color: var(--muted);
+      padding: 10px 14px;
+      background: var(--paper-2);
+      border-left: 2px solid var(--accent);
+    }
+
+    /* ══════ SECURITY ══════ */
+    .security-section { background: var(--ink); margin: 0; padding: 0; max-width: none; }
+
+    .security-inner {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 140px var(--edge);
+    }
+
+    .security-inner .section-title { color: var(--paper); }
+    .security-inner .section-title .italic { color: var(--accent); }
+    .security-inner .section-kicker { color: rgba(246, 242, 232, 0.55); }
+    .security-inner .section-chapter { color: var(--accent); }
+    .security-inner .section-chapter::before { background: var(--accent); }
+
+    .sec-pull {
+      font-family: var(--ff-display);
+      font-size: clamp(24px, 3vw, 38px);
+      font-weight: 300;
+      font-style: italic;
+      color: var(--paper);
+      line-height: 1.35;
+      max-width: 880px;
+      margin: 0 auto 80px;
+      padding-left: 160px;
+      position: relative;
+    }
+
+    .sec-pull::before {
+      content: '"';
+      position: absolute;
+      left: 40px;
+      top: -30px;
+      font-size: 140px;
+      color: var(--accent);
+      line-height: 1;
+      font-family: var(--ff-display);
+    }
+
+    .sec-pull .accent { color: var(--accent-soft); }
+
+    .security-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1px;
+      background: rgba(246, 242, 232, 0.1);
+      border-top: 1px solid rgba(246, 242, 232, 0.2);
+      border-bottom: 1px solid rgba(246, 242, 232, 0.2);
+    }
+
+    .sec-item {
+      background: var(--ink);
+      padding: 42px 40px;
+      transition: background 0.3s;
+      display: grid;
+      grid-template-columns: 80px 1fr;
+      gap: 32px;
+    }
+
+    .sec-item:hover { background: var(--ink-2); }
+
+    .sec-marker {
+      font-family: var(--ff-display);
+      font-size: 44px;
+      font-weight: 300;
+      line-height: 1;
+      padding-top: 6px;
+    }
+
+    .sec-marker.x { color: var(--accent); font-style: italic; }
+    .sec-marker.ok { color: var(--gold); font-style: italic; }
+
+    .sec-label {
+      font-family: var(--ff-mono);
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    .sec-item .sec-label { color: rgba(246, 242, 232, 0.45); }
+
+    .sec-title {
+      font-family: var(--ff-display);
+      font-size: 22px;
+      font-weight: 400;
+      color: var(--paper);
+      margin-bottom: 12px;
+      line-height: 1.2;
+      letter-spacing: -0.01em;
+    }
+
+    .sec-desc {
+      font-size: 13px;
+      color: rgba(246, 242, 232, 0.55);
+      line-height: 1.7;
+    }
+
+    .sec-desc code {
+      font-family: var(--ff-mono);
+      font-size: 11px;
+      color: var(--accent-soft);
+      background: rgba(181, 49, 38, 0.15);
+      padding: 1px 6px;
+      border-radius: 2px;
+    }
+
+    /* ══════ FAQ ══════ */
+    .faq-list {
+      border-top: 1px solid var(--ink);
+      border-bottom: 1px solid var(--ink);
+    }
+
+    .faq-item {
+      border-bottom: 1px solid rgba(18, 17, 15, 0.2);
+    }
+
+    .faq-item:last-child { border-bottom: none; }
+
+    .faq-q {
+      padding: 38px 8px;
+      font-family: var(--ff-display);
+      font-size: clamp(22px, 2vw, 30px);
+      font-weight: 300;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 32px;
+      background: transparent;
+      border: none;
+      width: 100%;
+      text-align: left;
+      transition: color 0.25s;
+    }
+
+    .faq-q:hover { color: var(--accent); }
+    .faq-item.open .faq-q { color: var(--accent); }
+
+    .faq-icon {
+      font-family: var(--ff-display);
+      font-size: 32px;
+      font-weight: 300;
+      font-style: italic;
+      transition: transform 0.4s ease;
+      flex-shrink: 0;
+    }
+
+    .faq-item.open .faq-icon { transform: rotate(45deg); }
+
+    .faq-a {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.4s ease, padding 0.4s ease;
+      font-family: var(--ff-display);
+      font-size: 17px;
+      font-style: italic;
+      font-weight: 300;
+      color: var(--muted);
+      line-height: 1.75;
+      max-width: 820px;
+    }
+
+    .faq-a code {
+      font-family: var(--ff-mono);
+      font-size: 14px;
+      font-style: normal;
+      color: var(--ink);
+      background: var(--paper-3);
+      padding: 1px 6px;
+      border-radius: 2px;
+    }
+
+    .faq-item.open .faq-a {
+      max-height: 400px;
+      padding: 0 8px 38px;
+    }
+
+    /* ══════ CTA ══════ */
+    .cta-section {
+      padding: 160px var(--edge);
+      max-width: 1440px;
+      margin: 0 auto;
+      text-align: center;
+      position: relative;
+      z-index: 2;
+    }
+
+    .cta-title {
+      font-family: var(--ff-display);
+      font-size: clamp(44px, 6vw, 96px);
+      font-weight: 300;
+      line-height: 0.95;
+      color: var(--ink);
+      margin-bottom: 48px;
+      letter-spacing: -0.04em;
+      max-width: 1100px;
+      margin-left: auto;
+      margin-right: auto;
+      font-variation-settings: 'opsz' 144;
+    }
+
+    .cta-title .italic {
+      font-style: italic;
+      color: var(--accent);
+    }
+
+    /* ══════ FOOTER ══════ */
+    footer {
+      background: var(--ink);
+      color: var(--paper);
+      padding: 80px var(--edge) 40px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .footer-inner {
+      max-width: 1440px;
+      margin: 0 auto;
+    }
+
+    .footer-mark {
+      font-family: var(--ff-display);
+      font-size: clamp(48px, 7vw, 124px);
+      font-weight: 300;
+      line-height: 0.9;
+      letter-spacing: -0.04em;
+      margin-bottom: 60px;
+      padding-bottom: 48px;
+      border-bottom: 1px solid rgba(246, 242, 232, 0.2);
+    }
+
+    .footer-mark .italic {
+      font-style: italic;
+      color: var(--accent);
+    }
+
+    .footer-mark .amp {
+      font-style: italic;
+      font-weight: 300;
+      color: rgba(246, 242, 232, 0.4);
+      padding: 0 0.05em;
+    }
+
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr;
+      gap: 60px;
+      margin-bottom: 80px;
+    }
+
+    .footer-lede {
+      font-family: var(--ff-display);
+      font-size: 20px;
+      font-style: italic;
+      font-weight: 300;
+      color: rgba(246, 242, 232, 0.7);
+      max-width: 400px;
+      line-height: 1.55;
+    }
+
+    .footer-col-title {
+      font-family: var(--ff-mono);
+      font-size: 10px;
+      color: rgba(246, 242, 232, 0.4);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+
+    .footer-col a, .footer-col span {
+      display: block;
+      font-family: var(--ff-body);
+      font-size: 13px;
+      color: rgba(246, 242, 232, 0.75);
+      text-decoration: none;
+      padding: 6px 0;
+      transition: color 0.2s;
+    }
+
+    .footer-col a:hover { color: var(--accent-soft); }
+
+    .footer-bottom {
+      display: flex;
+      justify-content: space-between;
+      padding-top: 32px;
+      border-top: 1px solid rgba(246, 242, 232, 0.1);
+      font-family: var(--ff-mono);
+      font-size: 10px;
+      color: rgba(246, 242, 232, 0.4);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    /* ══════ REVEAL ══════ */
+    .reveal {
+      opacity: 0;
+      transform: translateY(32px);
+      transition: opacity 0.85s cubic-bezier(0.16, 1, 0.3, 1), transform 0.85s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ══════ RESPONSIVE ══════ */
+    @media (max-width: 1100px) {
+      :root { --edge: 40px; }
+      .hero { padding: 160px var(--edge) 80px; }
+      .hero-meta { grid-template-columns: 1fr; gap: 48px; }
+      .hero-badge { position: static; margin-top: 40px; max-width: 100%; }
+      .section-head { grid-template-columns: 1fr; gap: 32px; margin-bottom: 64px; }
+      .prereqs-intro { padding-left: 0; }
+      .sec-pull { padding-left: 60px; }
+      .sec-pull::before { left: 0; }
+      .prereqs-grid { grid-template-columns: 1fr; }
+      .prereq { border-right: none; border-bottom: 1px solid rgba(18,17,15,0.18); }
+      .prereq:last-child { border-bottom: none; }
+      .commands-grid { grid-template-columns: 1fr 1fr; }
+      .arch-flow { grid-template-columns: 1fr; }
+      .arch-node { border-right: none; border-bottom: 1px solid rgba(246,242,232,0.15); }
+      .arch-node:last-child { border-bottom: none; }
+      .step-row { grid-template-columns: 1fr; gap: 32px; padding: 48px 32px; }
+      .security-grid { grid-template-columns: 1fr; }
+      .footer-grid { grid-template-columns: 1fr; gap: 32px; }
+      .footer-bottom { flex-direction: column; gap: 12px; text-align: center; }
+    }
+
+    @media (max-width: 700px) {
+      :root { --edge: 24px; }
+      nav { padding: 20px var(--edge); }
+      .nav-links { display: none; }
+      .hero { padding: 140px var(--edge) 60px; }
+      .section-head { margin-bottom: 48px; }
+      .commands-grid { grid-template-columns: 1fr; }
+      section { padding: 80px var(--edge); }
+      .arch-inner, .commands-inner, .security-inner { padding: 80px var(--edge); }
+      .cta-section { padding: 80px var(--edge); }
+      .sec-item { grid-template-columns: 1fr; gap: 16px; }
+      .sec-marker { font-size: 32px; }
+      body { cursor: auto; }
+      .cursor-dot, .cursor-ring { display: none; }
+      a, button, .faq-q, .cmd-card, .step-row, .prereq { cursor: auto; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="cursor-dot" id="cDot"></div>
+<div class="cursor-ring" id="cRing"></div>
+
+<!-- NAV -->
+<nav>
+  <div class="brand">
+    <span class="brand-mark">Bitrix × Telegram</span>
+    <span class="brand-sub">— Index</span>
+  </div>
+  <ul class="nav-links">
+    <li><a href="#prereqs">Start</a></li>
+    <li><a href="#flow">How it works</a></li>
+    <li><a href="#steps">Setup</a></li>
+    <li><a href="#commands">Commands</a></li>
+    <li><a href="#security">Security</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="hero-chapter">
+    <span class="hero-chapter-num">I.</span>
+    <span class="hero-chapter-line"></span>
+    <span class="hero-chapter-label">The bot that writes itself</span>
+  </div>
+
+  <h1 class="hero-title">
+    Создавай <em class="italic">задачи</em><br>
+    в Bitrix24 <span class="amp">—</span><br>
+    <em class="italic">из Telegram.</em>
+  </h1>
+
+  <div class="hero-badge">
+    <div class="hero-badge-num">06</div>
+    <div class="hero-badge-label"><strong>Шагов настройки</strong>Около&nbsp;часа&nbsp;времени &nbsp;·&nbsp; Ноль&nbsp;кода</div>
+  </div>
+
+  <div class="hero-meta">
+    <p class="hero-lede">
+      Бот на базе <strong>n8n</strong> превращает сообщение в Telegram
+      в полноценную задачу, эпик или элемент бэклога Bitrix24 —
+      без открытия браузера, без переключения контекста,
+      без лишних кликов.
+    </p>
+
+    <div class="hero-actions">
+      <a href="#steps" class="btn-primary">
+        <span>Начать настройку</span>
+        <span class="arrow">→</span>
+      </a>
+      <a href="#commands" class="btn-text">или посмотри команды</a>
+    </div>
+  </div>
+</header>
+
+<div class="rule">
+  <span class="rule-label">§ 00</span>
+  <span class="rule-line"></span>
+  <span class="rule-label">Prerequisites</span>
+</div>
+
+<!-- PREREQS -->
+<section id="prereqs">
+  <div class="section-head reveal">
+    <div class="section-chapter">Chapter 00</div>
+    <div>
+      <h2 class="section-title">Что <span class="italic">нужно</span><br>для старта</h2>
+      <p class="section-kicker">Три инструмента. Ничего лишнего. Всё — бесплатно в стартовой версии.</p>
+    </div>
+  </div>
+
+  <div class="prereqs-grid reveal">
+    <div class="prereq">
+      <div class="prereq-marker"><span>Required</span><span class="num">01</span></div>
+      <h3 class="prereq-title">Telegram <span class="italic">Bot</span></h3>
+      <p class="prereq-desc">
+        Создаётся за две минуты через официального бота <strong style="color:var(--ink)">@BotFather</strong>.
+        Выдаёт токен — длинную строку. Храни как пароль.
+      </p>
+      <a href="https://t.me/BotFather" target="_blank" class="prereq-link">Открыть BotFather →</a>
+    </div>
+
+    <div class="prereq">
+      <div class="prereq-marker"><span>Required</span><span class="num">02</span></div>
+      <h3 class="prereq-title">n8n <span class="italic">Workflow Engine</span></h3>
+      <p class="prereq-desc">
+        Low-code платформа автоматизации. Запускается локально через Docker
+        или в облаке на n8n.cloud. Именно здесь живёт весь сценарий бота.
+      </p>
+      <a href="https://n8n.io" target="_blank" class="prereq-link">n8n.io →</a>
+    </div>
+
+    <div class="prereq">
+      <div class="prereq-marker"><span>Required</span><span class="num">03</span></div>
+      <h3 class="prereq-title">Bitrix24 <span class="italic">Portal</span></h3>
+      <p class="prereq-desc">
+        Нужен доступ к порталу и право создать входящий вебхук
+        в разделе Приложения → Вебхуки. Это ключ к API задач.
+      </p>
+      <a href="https://www.bitrix24.ru" target="_blank" class="prereq-link">bitrix24.ru →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ARCH -->
+<div class="arch-section" id="flow">
+  <div class="arch-inner">
+    <div class="section-head reveal">
+      <div class="section-chapter">Chapter 01 · Architecture</div>
+      <div>
+        <h2 class="section-title">Как проходит <span class="italic">сообщение</span></h2>
+        <p class="section-kicker">Пять остановок от пользователя до задачи в Bitrix24 и обратно.</p>
+      </div>
+    </div>
+
+    <div class="arch-flow reveal">
+      <div class="arch-node">
+        <div class="arch-step">Step 01</div>
+        <div class="arch-label">Пользователь<br><em class="italic">пишет</em></div>
+        <div class="arch-desc">Команда в Telegram. Любой формат: эпик, задача, бэклог.</div>
+      </div>
+      <div class="arch-node">
+        <div class="arch-step">Step 02</div>
+        <div class="arch-label">Telegram<br><em class="italic">проксирует</em></div>
+        <div class="arch-desc">Webhook API передаёт сообщение на n8n-сервер.</div>
+      </div>
+      <div class="arch-node highlight">
+        <div class="arch-step">Step 03</div>
+        <div class="arch-label">n8n<br><em class="italic">обрабатывает</em></div>
+        <div class="arch-desc">Парсинг команды, извлечение параметров, роутинг.</div>
+      </div>
+      <div class="arch-node">
+        <div class="arch-step">Step 04</div>
+        <div class="arch-label">Bitrix24<br><em class="italic">создаёт</em></div>
+        <div class="arch-desc">REST API создаёт нужную сущность — задачу, эпик.</div>
+      </div>
+      <div class="arch-node">
+        <div class="arch-step">Step 05</div>
+        <div class="arch-label">Ответ<br><em class="italic">в чат</em></div>
+        <div class="arch-desc">Бот отправляет ID и ссылку на созданный объект.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="rule">
+  <span class="rule-label">§ 02</span>
+  <span class="rule-line"></span>
+  <span class="rule-label">Setup Guide</span>
+</div>
+
+<!-- STEPS -->
+<section id="steps">
+  <div class="section-head reveal">
+    <div class="section-chapter">Chapter 02 · Guide</div>
+    <div>
+      <h2 class="section-title">Настройка <span class="italic">за шесть шагов</span></h2>
+      <p class="section-kicker">Следуй по порядку сверху вниз. Каждый занимает 2–5 минут.</p>
+    </div>
+  </div>
+
+  <div class="steps-wrap">
+
+    <div class="step-row reveal">
+      <div class="step-label"><span class="num">I</span>Create a bot</div>
+      <div class="step-body-main">
+        <h3 class="step-title">Создай <em class="italic">Telegram-бота</em></h3>
+        <p class="step-desc">
+          Открой Telegram, найди <strong>@BotFather</strong> и отправь команду <code>/newbot</code>.
+          Придумай имя и username бота (должен заканчиваться на <code>_bot</code>).
+          Получишь <strong>токен</strong> — скопируй и сохрани в менеджере паролей.
+        </p>
+      </div>
+      <div class="step-body-aside">
+        <div class="code-block">
+          <span class="c"># BotFather диалог</span><br>
+          <span class="s">Ты:</span>        /newbot<br>
+          <span class="k">BotFather:</span> Как назовём?<br>
+          <span class="s">Ты:</span>        Tasks Bot<br>
+          <span class="k">BotFather:</span> Username?<br>
+          <span class="s">Ты:</span>        my_tasks_bot<br>
+          <span class="k">BotFather:</span> <span class="c">Готово. Токен:</span><br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="r">1234567890:ABCdef...</span>
+        </div>
+        <div class="step-note">
+          <div><strong>Важно.</strong> Токен — это пароль. Не коммить в git, не шли в чаты.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-row reveal">
+      <div class="step-label"><span class="num">II</span>Run engine</div>
+      <div class="step-body-main">
+        <h3 class="step-title">Запусти <em class="italic">n8n</em></h3>
+        <p class="step-desc">
+          Самый простой способ — Docker Compose. В папке проекта выполни <code>docker compose up -d</code>.
+          После запуска открой <code>http://localhost:5678</code>.
+          Либо зарегистрируйся на <strong>n8n.cloud</strong> и пропусти этот шаг.
+        </p>
+      </div>
+      <div class="step-body-aside">
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">COPY</button>
+          <span class="c"># Запуск через Docker Compose</span><br>
+          <span class="k">docker</span> compose up -d<br><br>
+          <span class="c"># Логи</span><br>
+          <span class="k">docker</span> compose logs -f n8n<br><br>
+          <span class="c"># Открой в браузере</span><br>
+          <span class="v">http://localhost:5678</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-row reveal" style="background:linear-gradient(90deg, rgba(181,49,38,0.08), transparent)">
+      <div class="step-label"><span class="num">II½</span>Public HTTPS</div>
+      <div class="step-body-main">
+        <h3 class="step-title">Получи <em class="italic">публичный HTTPS</em></h3>
+        <p class="step-desc">
+          Telegram требует HTTPS для вебхуков. Если n8n запущен локально, нужен публичный адрес.
+          <strong>DuckDNS</strong> — бесплатный поддомен. В сочетании с
+          <strong>Cloudflare Tunnel</strong> или <strong>ngrok</strong> даёт полноценный HTTPS без покупки домена.
+          <br><br>Пропусти этот шаг, если используешь n8n.cloud — там HTTPS уже есть.
+        </p>
+      </div>
+      <div class="step-body-aside">
+        <div class="code-block">
+          <span class="c"># 1. Зарегистрируй поддомен</span><br>
+          <span class="v">https://www.duckdns.org</span><br><br>
+          <span class="c"># 2. Пропиши в .env</span><br>
+          <span class="s">WEBHOOK_URL</span>=<span class="r">https://my-n8n.duckdns.org</span><br><br>
+          <span class="c"># 3. Туннель через Cloudflare</span><br>
+          <span class="k">cloudflared</span> tunnel --url <span class="v">http://localhost:5678</span><br><br>
+          <span class="c"># Или временный через ngrok</span><br>
+          <span class="k">ngrok</span> http <span class="r">5678</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-row reveal">
+      <div class="step-label"><span class="num">III</span>Bitrix webhook</div>
+      <div class="step-body-main">
+        <h3 class="step-title">Создай <em class="italic">вебхук в Bitrix24</em></h3>
+        <p class="step-desc">
+          Перейди: <strong>Приложения → Разработчикам → Другое → Входящий вебхук</strong>.
+          Выдай права на методы <code>task</code> и <code>sonet_group</code>.
+          Скопируй сгенерированный URL — он нужен в следующем шаге.
+        </p>
+      </div>
+      <div class="step-body-aside">
+        <div class="code-block">
+          <span class="c"># Формат URL вебхука</span><br>
+          <span class="v">https://</span><span class="r">ВАШ_ДОМЕН</span><span class="v">.bitrix24.ru</span><br>
+          <span class="v">&nbsp;&nbsp;/rest/</span><span class="r">USER_ID</span><span class="v">/</span><span class="r">ТОКЕН</span><span class="v">/</span><br><br>
+          <span class="c"># Необходимые scope-права:</span><br>
+          <span class="s">✓</span> task          <span class="c">— задачи</span><br>
+          <span class="s">✓</span> sonet_group   <span class="c">— рабочие группы</span>
+        </div>
+        <div class="step-note">
+          <div><strong>Внимание.</strong> Scope называется <code style="font-family:var(--ff-mono);font-style:normal;font-size:12px;background:var(--paper-3);padding:1px 5px">task</code> в единственном числе, не <code style="font-family:var(--ff-mono);font-style:normal;font-size:12px;background:var(--paper-3);padding:1px 5px">tasks</code>.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-row reveal">
+      <div class="step-label"><span class="num">IV</span>Environment</div>
+      <div class="step-body-main">
+        <h3 class="step-title">Заполни <em class="italic">.env</em></h3>
+        <p class="step-desc">
+          Скопируй <code>.env.example</code> в <code>.env</code> и заполни переменные.
+          Никогда не коммить реальный <code>.env</code> в git — он в <code>.gitignore</code>.
+        </p>
+      </div>
+      <div class="step-body-aside">
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">COPY</button>
+          <span class="c"># n8n core</span><br>
+          <span class="s">N8N_ENCRYPTION_KEY</span>=<span class="r">случайная_строка_32_символа</span><br>
+          <span class="s">N8N_BASIC_AUTH_USER</span>=<span class="v">admin</span><br>
+          <span class="s">N8N_BASIC_AUTH_PASSWORD</span>=<span class="r">надёжный_пароль</span><br><br>
+          <span class="c"># Public URL (для Telegram webhook)</span><br>
+          <span class="s">WEBHOOK_URL</span>=<span class="v">https://YOUR.duckdns.org</span><br><br>
+          <span class="c"># Bitrix24 webhook из шага III</span><br>
+          <span class="s">BITRIX24_WEBHOOK_URL</span>=<span class="v">https://портал.bitrix24.ru/rest/ID/TOKEN/</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-row reveal">
+      <div class="step-label"><span class="num">V</span>Import workflow</div>
+      <div class="step-body-main">
+        <h3 class="step-title">Импортируй <em class="italic">воркфлоу</em></h3>
+        <p class="step-desc">
+          В n8n: <strong>Workflows → Import from file</strong>. Выбери файл
+          <code>bitrix-telegram-bot.json</code>. Откроется граф автоматизации.
+          Затем открой ноду <strong>Send Telegram Reply</strong> и выбери Telegram Credential с токеном из шага I.
+        </p>
+      </div>
+      <div class="step-body-aside">
+        <div class="code-block">
+          <span class="c"># Telegram credentials в n8n</span><br>
+          Settings → Credentials → <span class="k">Add Credential</span><br>
+          → <span class="k">Telegram API</span><br>
+          → <span class="s">Access Token:</span> <span class="r">вставь_токен_из_шага_I</span><br>
+          → Save<br><br>
+          <span class="c"># В ноде Send Telegram Reply</span><br>
+          <span class="k">Credential for Telegram API:</span><br>
+          &nbsp;&nbsp;→ Выбери созданный credential
+        </div>
+      </div>
+    </div>
+
+    <div class="step-row reveal">
+      <div class="step-label"><span class="num">VI</span>Publish & test</div>
+      <div class="step-body-main">
+        <h3 class="step-title">Опубликуй <em class="italic">и протестируй</em></h3>
+        <p class="step-desc">
+          Нажми кнопку <strong>Publish</strong> в правом верхнем углу воркфлоу —
+          n8n активирует триггер Telegram. Теперь открой бота в Telegram и напиши первую команду.
+        </p>
+      </div>
+      <div class="step-body-aside">
+        <div class="code-block">
+          <span class="c"># Первый тест в Telegram</span><br>
+          <span class="s">/help</span>     <span class="c">— список всех команд</span><br><br>
+          <span class="c"># Создать задачу</span><br>
+          <span class="s">/backlog</span>  <span class="v">Моя первая задача</span><br><br>
+          <span class="c"># Создать эпик в Скраме</span><br>
+          <span class="s">/epic</span>     <span class="v">Переработка авторизации</span>
+        </div>
+        <div class="step-note">
+          <div><strong>Готово.</strong> Если бот ответил — задача появилась в Bitrix24.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- COMMANDS -->
+<div class="commands-section" id="commands">
+  <div class="commands-inner">
+    <div class="section-head reveal">
+      <div class="section-chapter">Chapter 03 · Reference</div>
+      <div>
+        <h2 class="section-title">Команды <span class="italic">бота</span></h2>
+        <p class="section-kicker">Шесть команд покрывают весь цикл работы с задачами в Скраме Bitrix24.</p>
+      </div>
+    </div>
+
+    <div class="commands-grid reveal">
+      <div class="cmd-card">
+        <div class="cmd-slash">/epic</div>
+        <h3 class="cmd-name"><em class="italic">Создать</em> эпик</h3>
+        <p class="cmd-desc">Добавляет эпик в Scrum-доску через метод <code>tasks.api.scrum.epic.add</code>. Эпик объединяет несколько задач спринта в одну крупную цель.</p>
+        <div class="cmd-example">/epic Переработка авторизации</div>
+      </div>
+
+      <div class="cmd-card">
+        <div class="cmd-slash">/sprint</div>
+        <h3 class="cmd-name"><em class="italic">Задача</em> спринта</h3>
+        <p class="cmd-desc">Создаёт задачу с дедлайном и приоритетом. Формат: <code>до DD.MM</code> и <code>высокий / низкий</code>.</p>
+        <div class="cmd-example">/sprint API логина до 25.01 высокий</div>
+      </div>
+
+      <div class="cmd-card">
+        <div class="cmd-slash">/backlog</div>
+        <h3 class="cmd-name"><em class="italic">Задача</em> бэклога</h3>
+        <p class="cmd-desc">Создаёт задачу без дедлайна — откладывается в бэклог для последующего планирования в спринте.</p>
+        <div class="cmd-example">/backlog Улучшить фильтры отчётов</div>
+      </div>
+
+      <div class="cmd-card">
+        <div class="cmd-slash">/task</div>
+        <h3 class="cmd-name"><em class="italic">Подзадача</em></h3>
+        <p class="cmd-desc">Создаёт подзадачу, привязанную к родительской. Укажи ID через <code>parent:#ID</code>.</p>
+        <div class="cmd-example">/task Написать тесты parent:#1234</div>
+      </div>
+
+      <div class="cmd-card">
+        <div class="cmd-slash">/tasks</div>
+        <h3 class="cmd-name"><em class="italic">Мои</em> задачи</h3>
+        <p class="cmd-desc">Возвращает список активных незавершённых задач (до 10 штук) с ID и названием.</p>
+        <div class="cmd-example">/tasks</div>
+      </div>
+
+      <div class="cmd-card">
+        <div class="cmd-slash">/help</div>
+        <h3 class="cmd-name"><em class="italic">Справка</em></h3>
+        <p class="cmd-desc">Показывает список всех команд и примеры прямо в Telegram. Хорошее начало для новичка.</p>
+        <div class="cmd-example">/help</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SECURITY -->
+<div class="security-section" id="security">
+  <div class="security-inner">
+    <div class="section-head reveal">
+      <div class="section-chapter">Chapter 04 · Security</div>
+      <div>
+        <h2 class="section-title">Токены <span class="italic">— не код.</span></h2>
+        <p class="section-kicker">Несколько правил, которые защитят тебя от утечки доступа к Bitrix24.</p>
+      </div>
+    </div>
+
+    <p class="sec-pull reveal">
+      Публичный webhook с правами на задачи — это <span class="accent">ключ к твоему порталу.</span>
+      Обращайся с ним как с паролем, а не как с кодом.
+    </p>
+
+    <div class="security-grid reveal">
+      <div class="sec-item">
+        <div class="sec-marker x">✕</div>
+        <div>
+          <div class="sec-label">Никогда</div>
+          <h4 class="sec-title">Не коммить workflows/ и .env в git</h4>
+          <p class="sec-desc">Файлы содержат URL вебхука с токеном. В публичном репозитории это открытый доступ к твоему порталу.</p>
+        </div>
+      </div>
+
+      <div class="sec-item">
+        <div class="sec-marker ok">✓</div>
+        <div>
+          <div class="sec-label">Всегда</div>
+          <h4 class="sec-title">Добавь workflows/ и .env в .gitignore</h4>
+          <p class="sec-desc">Одна строчка в <code>.gitignore</code> гарантирует, что секреты никогда не попадут в репозиторий случайно.</p>
+        </div>
+      </div>
+
+      <div class="sec-item">
+        <div class="sec-marker x">✕</div>
+        <div>
+          <div class="sec-label">Никогда</div>
+          <h4 class="sec-title">Не передавай токены через мессенджеры</h4>
+          <p class="sec-desc">Telegram, Slack, email — не место для токенов. Используй менеджеры паролей: 1Password, Bitwarden, Vault.</p>
+        </div>
+      </div>
+
+      <div class="sec-item">
+        <div class="sec-marker ok">✓</div>
+        <div>
+          <div class="sec-label">Всегда</div>
+          <h4 class="sec-title">Используй HTTPS для n8n</h4>
+          <p class="sec-desc">Telegram шлёт вебхуки только на HTTPS в продакшне. Для локалки — Cloudflare Tunnel или ngrok.</p>
+        </div>
+      </div>
+
+      <div class="sec-item">
+        <div class="sec-marker x">✕</div>
+        <div>
+          <div class="sec-label">Никогда</div>
+          <h4 class="sec-title">Не давай вебхуку лишние права</h4>
+          <p class="sec-desc">Выбирай только нужные scope: <code>task</code> и <code>sonet_group</code>. CRM, чаты, пользователи — это лишний доступ.</p>
+        </div>
+      </div>
+
+      <div class="sec-item">
+        <div class="sec-marker ok">✓</div>
+        <div>
+          <div class="sec-label">Всегда</div>
+          <h4 class="sec-title">Ротируй токены периодически</h4>
+          <p class="sec-desc">Раз в несколько месяцев создавай новый вебхук и токен. Старые сразу деактивируй в Bitrix24 и BotFather.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="rule">
+  <span class="rule-label">§ 05</span>
+  <span class="rule-line"></span>
+  <span class="rule-label">Questions</span>
+</div>
+
+<!-- FAQ -->
+<section>
+  <div class="section-head reveal">
+    <div class="section-chapter">Chapter 05 · FAQ</div>
+    <div>
+      <h2 class="section-title">Частые <span class="italic">вопросы</span></h2>
+    </div>
+  </div>
+
+  <div class="faq-list reveal">
+    <div class="faq-item">
+      <button class="faq-q" onclick="toggleFaq(this)">
+        <span>Бот не отвечает. Что делать?</span>
+        <span class="faq-icon">+</span>
+      </button>
+      <div class="faq-a">Проверь по порядку: воркфлоу опубликован (кнопка <code>Publish</code> нажата); Telegram Credentials выбраны в ноде Send Telegram Reply; в n8n нет ошибок в разделе Executions. Чаще всего причина — незаполненные credentials или воркфлоу не опубликован.</div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q" onclick="toggleFaq(this)">
+        <span>Задача создаётся не в той группе.</span>
+        <span class="faq-icon">+</span>
+      </button>
+      <div class="faq-a">GROUP_ID жёстко задан в нодах Prepare Sprint / Backlog / Subtask / Epic. Чтобы найти правильный ID — возьми свой webhook URL из шага III (тот же, что уже работает в воркфлоу) и добавь в конец <code>sonet_group.get.json</code>. Открой получившуюся ссылку в браузере — увидишь JSON со списком всех групп твоего портала. Найди нужную по полю <code>NAME</code> и скопируй её <code>ID</code>. Затем в n8n открой каждую из четырёх Prepare-нод и замени число в строке <code>GROUP_ID: 314</code> на свой ID.</div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q" onclick="toggleFaq(this)">
+        <span>Можно ли использовать бота в группе Telegram?</span>
+        <span class="faq-icon">+</span>
+      </button>
+      <div class="faq-a">Да. Добавь бота в группу и выдай права на чтение сообщений (Admin → Read Messages). Команды из группового чата тоже обрабатываются через Telegram Trigger.</div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q" onclick="toggleFaq(this)">
+        <span>Нужен платный план n8n?</span>
+        <span class="faq-icon">+</span>
+      </button>
+      <div class="faq-a">Нет. Воркфлоу полностью работает на n8n Community Edition — бесплатном self-hosted варианте. Для n8n.cloud достаточно бесплатного плана Starter.</div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q" onclick="toggleFaq(this)">
+        <span>Как указывать разных исполнителей задач?</span>
+        <span class="faq-icon">+</span>
+      </button>
+      <div class="faq-a">Сейчас RESPONSIBLE_ID задан жёстко. Чтобы указывать исполнителя через команду, добавь синтаксис <code>responsible:@username</code> и в Parse Message сопоставляй username с ID через метод <code>user.search</code>.</div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q" onclick="toggleFaq(this)">
+        <span>Публикация воркфлоу — это то же самое, что активация?</span>
+        <span class="faq-icon">+</span>
+      </button>
+      <div class="faq-a">В n8n кнопка называется <code>Publish</code> — она запускает триггер и делает воркфлоу готовым к приёму вебхуков. Это и есть активация. Без Publish Telegram Trigger не реагирует на входящие сообщения.</div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section reveal">
+  <h2 class="cta-title">
+    Один час настройки <span class="italic">—</span><br>
+    и задачи живут <em class="italic">в Telegram.</em>
+  </h2>
+  <a href="#steps" class="btn-primary">
+    <span>Начать сейчас</span>
+    <span class="arrow">→</span>
+  </a>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-mark">
+      Bitrix <span class="amp">×</span> <em class="italic">Telegram</em>
+    </div>
+
+    <div class="footer-grid">
+      <div class="footer-col">
+        <div class="footer-col-title">About</div>
+        <p class="footer-lede">
+          Open-source автоматизация для команд, которые живут в Telegram
+          и управляют задачами в Bitrix24.
+        </p>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Guide</div>
+        <a href="#prereqs">Prerequisites</a>
+        <a href="#flow">Architecture</a>
+        <a href="#steps">Setup</a>
+        <a href="#commands">Commands</a>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Stack</div>
+        <span>n8n Workflow Engine</span>
+        <span>Bitrix24 REST API</span>
+        <span>Telegram Bot API</span>
+        <span>Docker &amp; Compose</span>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Security</div>
+        <a href="#security">Best practices</a>
+        <a href="https://duckdns.org" target="_blank">DuckDNS</a>
+        <a href="https://www.cloudflare.com/products/tunnel/" target="_blank">Cloudflare Tunnel</a>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <span>§ Index of Commands · MMXXVI</span>
+      <span>Built with n8n &amp; care</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  /* CURSOR */
+  const dot = document.getElementById('cDot');
+  const ring = document.getElementById('cRing');
+  let mx = 0, my = 0, rx = 0, ry = 0;
+
+  document.addEventListener('mousemove', e => {
+    mx = e.clientX; my = e.clientY;
+    dot.style.left = mx + 'px';
+    dot.style.top = my + 'px';
+  });
+
+  (function loop() {
+    rx += (mx - rx) * 0.15;
+    ry += (my - ry) * 0.15;
+    ring.style.left = rx + 'px';
+    ring.style.top = ry + 'px';
+    requestAnimationFrame(loop);
+  })();
+
+  document.querySelectorAll('a, button, .cmd-card, .step-row, .prereq, .faq-q').forEach(el => {
+    el.addEventListener('mouseenter', () => {
+      ring.style.width = '72px';
+      ring.style.height = '72px';
+      ring.style.borderColor = 'rgba(181, 49, 38, 0.8)';
+    });
+    el.addEventListener('mouseleave', () => {
+      ring.style.width = '42px';
+      ring.style.height = '42px';
+      ring.style.borderColor = 'rgba(181, 49, 38, 0.45)';
+    });
+  });
+
+  /* SCROLL REVEAL */
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); }
+    });
+  }, { threshold: 0.08, rootMargin: '0px 0px -48px 0px' });
+
+  document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
+
+  /* FAQ */
+  function toggleFaq(btn) {
+    const item = btn.closest('.faq-item');
+    const isOpen = item.classList.contains('open');
+    document.querySelectorAll('.faq-item.open').forEach(i => i.classList.remove('open'));
+    if (!isOpen) item.classList.add('open');
+  }
+
+  /* COPY */
+  function copyCode(btn) {
+    const block = btn.closest('.code-block');
+    const text = block.innerText.replace('COPY', '').trim();
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'COPIED';
+      setTimeout(() => btn.textContent = 'COPY', 1800);
+    });
+  }
+</script>
+
+</body>
+</html>

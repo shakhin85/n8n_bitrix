@@ -1,0 +1,20 @@
+.env
+.env.backup
+node_modules/
+.n8n/
+*.log
+.DS_Store
+Thumbs.db
+
+# secrets / runtime
+workflows/
+lancedb/
+
+# local tooling
+.claude/settings.local.json
+.playwright-mcp/
+CLAUDE.local.md
+
+# debug screenshots from landing preview
+*.png
+!docs/*.png
