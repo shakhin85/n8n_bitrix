@@ -289,6 +289,42 @@
 
     .btn-primary:hover .arrow { transform: translateX(4px); }
 
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 17px 32px;
+      background: transparent;
+      color: var(--ink);
+      font-family: var(--ff-body);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-decoration: none;
+      text-transform: uppercase;
+      border: 1.5px solid var(--ink);
+      border-radius: 999px;
+      transition: all 0.3s ease;
+    }
+
+    .btn-secondary:hover {
+      background: var(--ink);
+      color: var(--paper);
+      transform: translateY(-2px);
+    }
+
+    .btn-secondary .gh-icon {
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .hero-actions-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: center;
+    }
+
     .btn-text {
       font-family: var(--ff-display);
       font-size: 15px;
@@ -1226,7 +1262,7 @@
   </h1>
 
   <div class="hero-badge">
-    <div class="hero-badge-num">06</div>
+    <div class="hero-badge-num">07</div>
     <div class="hero-badge-label"><strong>Шагов настройки</strong>Около&nbsp;часа&nbsp;времени &nbsp;·&nbsp; Ноль&nbsp;кода</div>
   </div>
 
@@ -1239,12 +1275,17 @@
     </p>
 
     <div class="hero-actions">
-      <a href="#steps" class="btn-primary">
-        <span>Начать настройку</span>
-        <span class="arrow">→</span>
-      </a>
+      <div class="hero-actions-row">
+        <a href="#steps" class="btn-primary">
+          <span>Начать настройку</span>
+          <span class="arrow">→</span>
+        </a>
+        <a href="https://github.com/shakhin85/n8n_bitrix" target="_blank" class="btn-secondary">
+          <span class="gh-icon">◉</span>
+          <span>View on GitHub</span>
+        </a>
+      </div>
       <a href="#commands" class="btn-text">или посмотри команды</a>
-      <a href="https://github.com/shakhin85/n8n_bitrix" target="_blank" class="btn-text">★ GitHub</a>
     </div>
   </div>
 </header>
@@ -1356,6 +1397,35 @@
   </div>
 
   <div class="steps-wrap">
+
+    <div class="step-row reveal">
+      <div class="step-label"><span class="num">0</span>Get the code</div>
+      <div class="step-body-main">
+        <h3 class="step-title">Склонируй <em class="italic">репозиторий</em></h3>
+        <p class="step-desc">
+          Весь код проекта — на GitHub. Клонируй его к себе любым способом: через
+          <code>git clone</code>, <code>gh repo clone</code> или скачай ZIP со страницы репо.
+          Внутри: <code>docker-compose.yml</code>, готовый workflow для импорта и шаблон
+          <code>.env.example</code>.
+        </p>
+        <div class="step-note">
+          <div><strong>Нужен Git.</strong> Если его нет — поставь с <a href="https://git-scm.com" target="_blank" style="color:var(--accent);text-decoration:underline">git-scm.com</a>,
+          либо скачай архив одной кнопкой со страницы <a href="https://github.com/shakhin85/n8n_bitrix" target="_blank" style="color:var(--accent);text-decoration:underline">репозитория</a> (Code → Download ZIP).</div>
+        </div>
+      </div>
+      <div class="step-body-aside">
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">COPY</button>
+          <span class="c"># Через HTTPS (универсально)</span><br>
+          <span class="k">git</span> clone <span class="v">https://github.com/shakhin85/n8n_bitrix.git</span><br>
+          <span class="k">cd</span> n8n_bitrix<br><br>
+          <span class="c"># Или через GitHub CLI</span><br>
+          <span class="k">gh</span> repo clone <span class="v">shakhin85/n8n_bitrix</span><br><br>
+          <span class="c"># Или через SSH (если настроен ключ)</span><br>
+          <span class="k">git</span> clone <span class="v">git@github.com:shakhin85/n8n_bitrix.git</span>
+        </div>
+      </div>
+    </div>
 
     <div class="step-row reveal">
       <div class="step-label"><span class="num">I</span>Create a bot</div>
@@ -1755,10 +1825,16 @@
     Один час настройки <span class="italic">—</span><br>
     и задачи живут <em class="italic">в Telegram.</em>
   </h2>
-  <a href="#steps" class="btn-primary">
-    <span>Начать сейчас</span>
-    <span class="arrow">→</span>
-  </a>
+  <div class="hero-actions-row" style="justify-content:center">
+    <a href="#steps" class="btn-primary">
+      <span>Начать сейчас</span>
+      <span class="arrow">→</span>
+    </a>
+    <a href="https://github.com/shakhin85/n8n_bitrix" target="_blank" class="btn-secondary">
+      <span class="gh-icon">◉</span>
+      <span>View on GitHub</span>
+    </a>
+  </div>
 </section>
 
 <!-- FOOTER -->
