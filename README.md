@@ -1,6 +1,12 @@
 # Telegram Bot для создания задач Bitrix24
 
+[![Landing](https://img.shields.io/badge/docs-landing_page-b53126?style=flat-square)](https://shakhin85.github.io/n8n_bitrix/)
+[![n8n](https://img.shields.io/badge/built_with-n8n-EA4B71?style=flat-square&logo=n8n&logoColor=white)](https://n8n.io)
+[![Bitrix24](https://img.shields.io/badge/Bitrix24-REST_API-2FC6F6?style=flat-square)](https://apidocs.bitrix24.com)
+
 Автоматизация создания задач в Bitrix24 через Telegram-бота и n8n.
+
+**Полная инструкция и архитектура → [shakhin85.github.io/n8n_bitrix](https://shakhin85.github.io/n8n_bitrix/)**
 
 ## Быстрый старт
 
