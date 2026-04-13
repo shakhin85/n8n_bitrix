@@ -1411,21 +1411,41 @@
       <div class="step-body-main">
         <h3 class="step-title">Получи <em class="italic">публичный HTTPS</em></h3>
         <p class="step-desc">
-          Telegram требует HTTPS для вебхуков. Если n8n запущен локально, нужен публичный адрес.
-          <strong>DuckDNS</strong> — бесплатный поддомен. В сочетании с
-          <strong>Cloudflare Tunnel</strong> или <strong>ngrok</strong> даёт полноценный HTTPS без покупки домена.
-          <br><br>Пропусти этот шаг, если используешь n8n.cloud — там HTTPS уже есть.
+          Telegram шлёт вебхуки только на HTTPS. n8n запущен локально в Docker — значит, нужен
+          публичный адрес, который проксирует запросы на <code>localhost:5678</code>.
+          <br><br>
+          <strong>Рабочий способ для этого проекта — обратный SSH-туннель на внешний VPS.</strong>
+          На сервере поднят HTTPS-терминатор (nginx/Caddy) на домене, который проксирует
+          <code>127.0.0.1:5678</code> → локальный n8n через туннель.
         </p>
+        <div class="step-note">
+          <div><strong>Рекомендация.</strong> Для продакшена лучше сразу поднимать Docker-образ n8n
+          <strong>на самом VPS</strong>: домен, Let's Encrypt через Caddy/Nginx, <code>WEBHOOK_URL</code> ведёт
+          прямо на сервер. Так ты избавляешься от туннеля как класса — n8n доступен 24/7
+          без зависимости от локальной машины.</div>
+        </div>
+        <div class="step-note">
+          <div><strong>Важно.</strong> Если всё-таки держишь n8n локально — команду <code>ssh -N -R</code> нужно
+          запускать <strong>каждый раз</strong> перед работой с ботом. Пока туннель не поднят, Telegram не сможет
+          достучаться до n8n и триггер будет «висеть» в ожидании событий.</div>
+        </div>
       </div>
       <div class="step-body-aside">
         <div class="code-block">
-          <span class="c"># 1. Зарегистрируй поддомен</span><br>
-          <span class="v">https://www.duckdns.org</span><br><br>
-          <span class="c"># 2. Пропиши в .env</span><br>
-          <span class="s">WEBHOOK_URL</span>=<span class="r">https://my-n8n.duckdns.org</span><br><br>
-          <span class="c"># 3. Туннель через Cloudflare</span><br>
-          <span class="k">cloudflared</span> tunnel --url <span class="v">http://localhost:5678</span><br><br>
-          <span class="c"># Или временный через ngrok</span><br>
+          <button class="copy-btn" onclick="copyCode(this)">COPY</button>
+          <span class="c"># Обратный SSH-туннель на VPS</span><br>
+          <span class="c"># (оставь висеть в отдельном терминале)</span><br>
+          <span class="k">ssh</span> -N -R <span class="r">5678:localhost:5678</span> <span class="v">root@&lt;VPS_HOST&gt;</span><br><br>
+          <span class="c"># Флаги:</span><br>
+          <span class="s">-N</span> <span class="c">— не открывать shell, только форвард</span><br>
+          <span class="s">-R</span> <span class="c">— remote port forward (VPS → локалка)</span><br><br>
+          <span class="c"># На VPS должен быть включён GatewayPorts</span><br>
+          <span class="c"># в /etc/ssh/sshd_config, и HTTPS-прокси</span><br>
+          <span class="c"># на домене из WEBHOOK_URL</span>
+        </div>
+        <div class="code-block" style="margin-top:12px">
+          <span class="c"># Альтернативы (если нет своего VPS)</span><br>
+          <span class="k">cloudflared</span> tunnel --url <span class="v">http://localhost:5678</span><br>
           <span class="k">ngrok</span> http <span class="r">5678</span>
         </div>
       </div>
